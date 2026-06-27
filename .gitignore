@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+*.egg
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+dist/
+build/
+.vite/
+
+# Docker
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# Database (SQLite local dev)
+*.db
+*.sqlite
+*.sqlite3
+
+# Linter & type-checker cache
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Misc
+*.tmp
+*.bak

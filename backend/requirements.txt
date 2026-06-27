@@ -1,0 +1,35 @@
+# Core Framework
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+
+# Database
+sqlalchemy[asyncio]>=2.0.25
+asyncpg>=0.29.0
+alembic>=1.13.0
+
+# Validation & Settings
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# Caching
+redis>=5.0.0
+
+# HTTP Client (for external API calls & testing)
+httpx>=0.26.0
+
+# Scheduling
+apscheduler>=3.10.4
+
+# Data Processing
+pandas>=2.1.0
+numpy>=1.26.0
+
+# File Uploads
+python-multipart>=0.0.6
+
+# External Data Sources (optional)
+# Uncomment to enable additional data sources:
+# akshare>=1.14.0           # AKShare — Chinese financial data library
+# tushare>=1.4.0            # Tushare Pro — requires TUSHARE_TOKEN env var
+# paddleocr>=2.8.0          # PaddleOCR — OCR for fund screenshot parsing
+# paddlepaddle>=3.0.0       # PaddlePaddle — required by PaddleOCR
