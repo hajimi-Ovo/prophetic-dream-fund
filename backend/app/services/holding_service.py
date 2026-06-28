@@ -11,7 +11,7 @@ import logging
 from decimal import Decimal
 from typing import Any
 
-from redis.asyncio import Redis
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,19 +25,23 @@ logger = logging.getLogger(__name__)
 class HoldingService:
     """Async service for holding CRUD, watchlist, and P&L calculations."""
 
-    def __init__(self, db: AsyncSession, redis: Redis) -> None:
+    def __init__(self, db: AsyncSession) -> None:
         self.db = db
-        self.cache = CacheService(redis)
+        self.cache = CacheService()
 
     # ------------------------------------------------------------------
     # Holding CRUD
     # ------------------------------------------------------------------
     async def create(self, data: HoldingCreate) -> dict[str, Any]:
         """Create a new holding and record the initial buy transaction."""
+        from datetime import date as date_cls
+
+        fund_name = data.fund_name or data.fund_code
+        buy_date = data.buy_date or date_cls.today()
         holding = Holding(
             fund_code=data.fund_code,
-            fund_name=data.fund_name,
-            buy_date=data.buy_date,
+            fund_name=fund_name,
+            buy_date=buy_date,
             amount=data.amount,
             shares=data.shares,
             buy_nav=data.buy_nav,
@@ -49,7 +53,7 @@ class HoldingService:
         txn = FundTransaction(
             holding_id=holding.id,
             type="buy",
-            date=data.buy_date,
+            date=buy_date,
             amount=data.amount,
             shares=data.shares,
             price=data.buy_nav,
@@ -60,7 +64,7 @@ class HoldingService:
         # Re-query to get a fresh instance after commit
         result = await self.db.execute(select(Holding).where(Holding.id == holding.id))
         created = result.scalar_one()
-        return _holding_to_dict(created)
+        return _to_json(_holding_to_dict(created))
 
     async def list_with_profit(self) -> dict[str, Any]:
         """
@@ -196,7 +200,7 @@ class HoldingService:
                 "profit_loss_ratio": worst_item["profit_loss_ratio"],
             }
 
-        return {
+        return _to_json({
             "items": enriched,
             "summary": {
                 "total_asset": total_market_value,
@@ -209,7 +213,7 @@ class HoldingService:
                 "best_fund": best_fund,
                 "worst_fund": worst_fund,
             },
-        }
+        })
 
     async def get(self, id: int) -> dict[str, Any] | None:
         """Get a single holding with real-time P&L details."""
@@ -251,9 +255,9 @@ class HoldingService:
             item["profit_loss_ratio"] = None
 
         # For single holding, ratio is 1.0 (100%)
-        item["holding_ratio"] = Decimal("1.0")
+        item["holding_ratio"] = 1.0
 
-        return item
+        return _to_json(item)
 
     async def update(self, id: int, data: HoldingUpdate) -> dict[str, Any] | None:
         """Update a holding.  *fund_code* cannot be changed."""
@@ -277,7 +281,7 @@ class HoldingService:
         # Re-query to get a fresh instance after commit
         result = await self.db.execute(select(Holding).where(Holding.id == id))
         refreshed = result.scalar_one()
-        return _holding_to_dict(refreshed)
+        return _to_json(_holding_to_dict(refreshed))
 
     async def delete(self, id: int) -> bool:
         """Delete a holding — cascading deletes apply to related transactions."""
@@ -301,7 +305,7 @@ class HoldingService:
         existing = result.scalar_one_or_none()
 
         if existing:
-            return _watchlist_to_dict(existing)
+            return _to_json(_watchlist_to_dict(existing))
 
         wl = FundWatchlist(fund_code=fund_code, fund_name=fund_name)
         self.db.add(wl)
@@ -312,7 +316,7 @@ class HoldingService:
             select(FundWatchlist).where(FundWatchlist.fund_code == fund_code)
         )
         created = result.scalar_one()
-        return _watchlist_to_dict(created)
+        return _to_json(_watchlist_to_dict(created))
 
     async def list_watchlist(self) -> list[dict[str, Any]]:
         """List all watchlist entries enriched with latest NAV data."""
@@ -334,7 +338,7 @@ class HoldingService:
                 item["latest_nav"] = None
                 item["daily_return"] = None
             items.append(item)
-        return items
+        return _to_json(items)
 
     async def remove_from_watchlist(self, fund_code: str) -> bool:
         """Remove a fund from the watchlist by its fund_code."""
@@ -353,6 +357,21 @@ class HoldingService:
 # ---------------------------------------------------------------------------
 # Module-level helpers
 # ---------------------------------------------------------------------------
+def _to_json(v: Any) -> Any:
+    """Recursively convert Decimal → float and date/datetime → isoformat."""
+    from datetime import date as date_cls, datetime as datetime_cls
+
+    if isinstance(v, Decimal):
+        return float(v)
+    if isinstance(v, date_cls | datetime_cls):
+        return v.isoformat()
+    if isinstance(v, dict):
+        return {k: _to_json(val) for k, val in v.items()}
+    if isinstance(v, list | tuple):
+        return [_to_json(val) for val in v]
+    return v
+
+
 def _holding_to_dict(h: Holding) -> dict[str, Any]:
     """Convert a Holding ORM instance to a plain dict."""
     return {
@@ -360,16 +379,16 @@ def _holding_to_dict(h: Holding) -> dict[str, Any]:
         "fund_code": h.fund_code,
         "fund_name": h.fund_name,
         "buy_date": h.buy_date,
-        "amount": h.amount,
-        "shares": h.shares,
-        "buy_nav": h.buy_nav,
+        "amount": float(h.amount),
+        "shares": float(h.shares),
+        "buy_nav": float(h.buy_nav) if h.buy_nav is not None else None,
         "latest_nav": None,
         "market_value": None,
         "profit_loss": None,
         "profit_loss_ratio": None,
         "holding_ratio": None,
-        "created_at": h.created_at,
-        "updated_at": h.updated_at,
+        "created_at": h.created_at.isoformat() if h.created_at else None,
+        "updated_at": h.updated_at.isoformat() if h.updated_at else None,
     }
 
 

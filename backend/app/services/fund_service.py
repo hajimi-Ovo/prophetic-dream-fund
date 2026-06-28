@@ -12,7 +12,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from redis.asyncio import Redis
+
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,9 +42,9 @@ PERIOD_DAYS: dict[str, int] = {
 class FundService:
     """Async service for fund queries, filtering, comparison, and analytics."""
 
-    def __init__(self, db: AsyncSession, redis: Redis) -> None:
+    def __init__(self, db: AsyncSession) -> None:
         self.db = db
-        self.cache = CacheService(redis)
+        self.cache = CacheService()
 
     # ------------------------------------------------------------------
     # Search

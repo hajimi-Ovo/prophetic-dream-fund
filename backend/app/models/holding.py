@@ -8,11 +8,11 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
-    BigInteger,
     CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
+    Integer,
     Numeric,
     String,
     func,
@@ -28,7 +28,7 @@ class Holding(Base):
     __tablename__ = "holdings"
 
     id: Mapped[int] = mapped_column(
-        BigInteger, primary_key=True, autoincrement=True
+        Integer, primary_key=True, autoincrement=True
     )
     fund_code: Mapped[str] = mapped_column(
         String(10), nullable=False, comment="Fund ticker code"
@@ -60,7 +60,7 @@ class Holding(Base):
         comment="Last update timestamp",
     )
     user_id: Mapped[int | None] = mapped_column(
-        BigInteger, default=None, nullable=True, comment="Owner user ID"
+        Integer, default=None, nullable=True, comment="Owner user ID"
     )
 
 
@@ -76,10 +76,10 @@ class FundTransaction(Base):
     )
 
     id: Mapped[int] = mapped_column(
-        BigInteger, primary_key=True, autoincrement=True
+        Integer, primary_key=True, autoincrement=True
     )
     holding_id: Mapped[int] = mapped_column(
-        BigInteger,
+        Integer,
         ForeignKey("holdings.id", ondelete="CASCADE"),
         nullable=False,
         comment="FK to holdings.id",
@@ -105,7 +105,7 @@ class FundTransaction(Base):
         comment="Record creation timestamp",
     )
     user_id: Mapped[int | None] = mapped_column(
-        BigInteger, default=None, nullable=True, comment="Owner user ID"
+        Integer, default=None, nullable=True, comment="Owner user ID"
     )
 
 
@@ -115,7 +115,7 @@ class FundWatchlist(Base):
     __tablename__ = "fund_watchlists"
 
     id: Mapped[int] = mapped_column(
-        BigInteger, primary_key=True, autoincrement=True
+        Integer, primary_key=True, autoincrement=True
     )
     fund_code: Mapped[str] = mapped_column(
         String(10), nullable=False, unique=True, comment="Fund ticker code (MVP: single-user; multi-user: add composite unique with user_id)"
@@ -129,5 +129,5 @@ class FundWatchlist(Base):
         comment="When this fund was added to the watchlist",
     )
     user_id: Mapped[int | None] = mapped_column(
-        BigInteger, default=None, nullable=True, comment="Owner user ID"
+        Integer, default=None, nullable=True, comment="Owner user ID"
     )

@@ -10,11 +10,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from redis.asyncio import Redis
-
 from app.adapters import ADAPTER_REGISTRY, get_adapter
-from app.api.dependencies import get_redis
-from app.services.cache_service import CacheService
+from app.services.cache_service import get_cache
 
 logger = logging.getLogger(__name__)
 
@@ -57,9 +54,9 @@ async def list_data_sources() -> dict[str, Any]:
 # GET /data/refresh-status — last refresh time and data completeness
 # ---------------------------------------------------------------------------
 @router.get("/refresh-status")
-async def get_refresh_status(redis: Redis = Depends(get_redis)) -> dict[str, Any]:
+async def get_refresh_status() -> dict[str, Any]:
     """Return last refresh time and known data gaps."""
-    cache = CacheService(redis)
+    cache = get_cache()
     refresh_time = await cache.get_refresh_time()
 
     data: dict[str, Any] = {

@@ -8,10 +8,10 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
-    BigInteger,
     Date,
     DateTime,
     ForeignKey,
+    Integer,
     Numeric,
     String,
     UniqueConstraint,
@@ -60,7 +60,7 @@ class Fund(Base):
         comment="Last update timestamp",
     )
     user_id: Mapped[int | None] = mapped_column(
-        BigInteger, default=None, nullable=True, comment="Owner user ID"
+        Integer, default=None, nullable=True, comment="Owner user ID"
     )
 
 
@@ -73,7 +73,7 @@ class FundNav(Base):
     )
 
     id: Mapped[int] = mapped_column(
-        BigInteger, primary_key=True, autoincrement=True
+        Integer, primary_key=True, autoincrement=True
     )
     fund_code: Mapped[str] = mapped_column(
         String(10),
@@ -94,7 +94,7 @@ class FundNav(Base):
         Numeric(10, 6), default=None, comment="Daily return (decimal, e.g. 0.0012)"
     )
     user_id: Mapped[int | None] = mapped_column(
-        BigInteger, default=None, nullable=True, comment="Owner user ID"
+        Integer, default=None, nullable=True, comment="Owner user ID"
     )
 
 
@@ -110,7 +110,7 @@ class FundHolding(Base):
     )
 
     id: Mapped[int] = mapped_column(
-        BigInteger, primary_key=True, autoincrement=True
+        Integer, primary_key=True, autoincrement=True
     )
     fund_code: Mapped[str] = mapped_column(
         String(10),
@@ -131,7 +131,7 @@ class FundHolding(Base):
         Numeric(8, 4), default=None, comment="Weight in portfolio (decimal)"
     )
     user_id: Mapped[int | None] = mapped_column(
-        BigInteger, default=None, nullable=True, comment="Owner user ID"
+        Integer, default=None, nullable=True, comment="Owner user ID"
     )
 
 
@@ -141,7 +141,7 @@ class FundManager(Base):
     __tablename__ = "fund_managers"
 
     id: Mapped[int] = mapped_column(
-        BigInteger, primary_key=True, autoincrement=True
+        Integer, primary_key=True, autoincrement=True
     )
     fund_code: Mapped[str] = mapped_column(
         String(10),
@@ -159,5 +159,5 @@ class FundManager(Base):
         Numeric(10, 4), default=None, comment="Return during tenure"
     )
     user_id: Mapped[int | None] = mapped_column(
-        BigInteger, default=None, nullable=True, comment="Owner user ID"
+        Integer, default=None, nullable=True, comment="Owner user ID"
     )

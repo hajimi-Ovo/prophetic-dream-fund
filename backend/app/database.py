@@ -1,12 +1,13 @@
 """
 Async SQLAlchemy database engine, session factory, and dependency.
 
-Provides the core database infrastructure for the application.
+Uses SQLite + aiosqlite for single-user local deployment.
 """
 
 import logging
 from collections.abc import AsyncGenerator
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -18,20 +19,13 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Build engine kwargs based on database type
-_engine_kwargs: dict = {"echo": settings.APP_DEBUG}
+# SQLite engine — single-file database, no connection pool needed
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    echo=settings.APP_DEBUG,
+    connect_args={"check_same_thread": False},
+)
 
-if "postgresql" in settings.DATABASE_URL or "asyncpg" in settings.DATABASE_URL:
-    _engine_kwargs.update(
-        pool_size=10,
-        max_overflow=20,
-        pool_pre_ping=True,
-    )
-
-# Async engine bound to the configured DATABASE_URL
-engine = create_async_engine(settings.DATABASE_URL, **_engine_kwargs)
-
-# Async session factory — callers use async_sessionmaker context
 async_session = async_sessionmaker(
     engine,
     class_=AsyncSession,
@@ -40,31 +34,22 @@ async_session = async_sessionmaker(
 
 
 class Base(DeclarativeBase):
-    """
-    Declarative base for all ORM models.
-
-    Inherit from this class to register a model with SQLAlchemy's
-    metadata and enable Alembic autogenerate.
-    """
-
+    """Declarative base for all ORM models."""
     pass
 
 
 async def init_db() -> None:
-    """Create all tables (for SQLite/dev — production uses Alembic migrations)."""
+    """Create all tables if they don't exist (idempotent)."""
     import app.models  # noqa: F401 — ensure all models are registered
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # SQLite does not enforce foreign keys by default
+        await conn.execute(text("PRAGMA foreign_keys=ON"))
     logger.info("Database tables created/verified")
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """
-    FastAPI dependency that yields an async database session.
-
-    The session is automatically closed when the request completes,
-    even if an exception occurs.
-    """
+    """FastAPI dependency that yields an async database session."""
     async with async_session() as session:
         try:
             yield session

@@ -10,10 +10,9 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
-from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_db, get_redis
+from app.api.dependencies import get_db
 from app.services.dashboard_service import DashboardService
 
 logger = logging.getLogger(__name__)
@@ -27,10 +26,9 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 @router.get("/summary")
 async def get_dashboard_summary(
     db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
 ) -> dict[str, Any]:
     """Get dashboard summary: total asset, profit, today profit, holding count."""
-    service = DashboardService(db, redis)
+    service = DashboardService(db)
     result = await service.get_summary()
     return {
         "code": 0,
@@ -49,10 +47,9 @@ async def get_returns_chart(
         description="Chart period: 1m, 3m, 6m, 1y, all",
     ),
     db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
 ) -> dict[str, Any]:
     """Get cumulative returns curve with optional benchmark comparison."""
-    service = DashboardService(db, redis)
+    service = DashboardService(db)
     result = await service.get_returns_chart(period)
     return {
         "code": 0,
@@ -67,10 +64,9 @@ async def get_returns_chart(
 @router.get("/allocation")
 async def get_allocation(
     db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
 ) -> dict[str, Any]:
     """Get portfolio allocation breakdown grouped by fund type."""
-    service = DashboardService(db, redis)
+    service = DashboardService(db)
     result = await service.get_allocation()
     return {
         "code": 0,
@@ -85,10 +81,9 @@ async def get_allocation(
 @router.get("/risk-metrics")
 async def get_risk_metrics(
     db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
 ) -> dict[str, Any]:
     """Get portfolio-level risk metrics: max drawdown, Sharpe ratio, volatility."""
-    service = DashboardService(db, redis)
+    service = DashboardService(db)
     result = await service.get_risk_metrics()
     return {
         "code": 0,

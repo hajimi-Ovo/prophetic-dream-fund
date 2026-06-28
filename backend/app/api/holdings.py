@@ -10,10 +10,9 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_db, get_redis
+from app.api.dependencies import get_db
 from app.schemas.holding import HoldingCreate, HoldingUpdate
 from app.services.holding_service import HoldingService
 
@@ -33,10 +32,9 @@ ERR_INVALID_CODE = 10002
 async def create_holding(
     data: HoldingCreate,
     db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
 ) -> dict[str, Any]:
     """Create a new holding and record the initial buy transaction."""
-    service = HoldingService(db, redis)
+    service = HoldingService(db)
     holding = await service.create(data)
     return {
         "code": 0,
@@ -51,10 +49,9 @@ async def create_holding(
 @router.get("")
 async def list_holdings(
     db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
 ) -> dict[str, Any]:
     """List all holdings with real-time profit/loss calculations."""
-    service = HoldingService(db, redis)
+    service = HoldingService(db)
     result = await service.list_with_profit()
     return {
         "code": 0,
@@ -73,10 +70,9 @@ async def list_holdings(
 async def get_holding(
     id: int,
     db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
 ) -> dict[str, Any]:
     """Get a single holding with real-time P&L details."""
-    service = HoldingService(db, redis)
+    service = HoldingService(db)
     holding = await service.get(id)
     if holding is None:
         return {
@@ -99,10 +95,9 @@ async def update_holding(
     id: int,
     data: HoldingUpdate,
     db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
 ) -> dict[str, Any]:
     """Update a holding. Fund code cannot be changed after creation."""
-    service = HoldingService(db, redis)
+    service = HoldingService(db)
     holding = await service.update(id, data)
     if holding is None:
         return {
@@ -124,10 +119,9 @@ async def update_holding(
 async def delete_holding(
     id: int,
     db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
 ) -> dict[str, Any]:
     """Delete a holding and cascade to related transactions."""
-    service = HoldingService(db, redis)
+    service = HoldingService(db)
     deleted = await service.delete(id)
     if not deleted:
         return {

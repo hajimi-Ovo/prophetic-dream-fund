@@ -18,8 +18,8 @@ class HoldingCreate(BaseModel):
     """Request body for creating a new holding."""
 
     fund_code: str = Field(..., min_length=1, max_length=10, description="Fund ticker code")
-    fund_name: str = Field(..., min_length=1, max_length=100, description="Fund display name")
-    buy_date: date = Field(..., description="Initial purchase date")
+    fund_name: str | None = Field(None, min_length=1, max_length=100, description="Fund display name (defaults to fund_code)")
+    buy_date: date | None = Field(None, description="Initial purchase date (defaults to today)")
     amount: Decimal = Field(..., gt=0, max_digits=18, decimal_places=2, description="Total invested amount (CNY)")
     shares: Decimal = Field(..., gt=0, max_digits=18, decimal_places=4, description="Current shares held")
     buy_nav: Decimal | None = Field(None, max_digits=10, decimal_places=4, description="Purchase NAV at entry time")

@@ -10,10 +10,9 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
-from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_db, get_redis
+from app.api.dependencies import get_db
 from app.schemas.fund import (
     FundFilterParams,
     SortOrder,
@@ -34,10 +33,9 @@ async def search_funds(
     page: int = Query(default=1, ge=1, description="Page number"),
     page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
     db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
 ) -> dict[str, Any]:
     """Fuzzy search funds by code or name."""
-    service = FundService(db, redis)
+    service = FundService(db)
     result = await service.search(keyword=keyword, page=page, page_size=page_size)
     return {
         "code": 0,
@@ -70,7 +68,6 @@ async def filter_funds(
     page: int = Query(default=1, ge=1, description="Page number"),
     page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
     db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
 ) -> dict[str, Any]:
     """Multi-dimension fund filtering with sort and pagination."""
     from decimal import Decimal
@@ -92,7 +89,7 @@ async def filter_funds(
         page_size=page_size,
     )
 
-    service = FundService(db, redis)
+    service = FundService(db)
     result = await service.filter_funds(params)
     return {
         "code": 0,
@@ -113,7 +110,6 @@ async def filter_funds(
 async def compare_funds(
     codes: str = Query(..., description="Comma-separated fund codes, e.g. 000001,110022"),
     db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
 ) -> dict[str, Any]:
     """Multi-fund side-by-side comparison with chart overlay data."""
     code_list = [c.strip() for c in codes.split(",") if c.strip()]
@@ -124,7 +120,7 @@ async def compare_funds(
             "data": None,
         }
 
-    service = FundService(db, redis)
+    service = FundService(db)
     result = await service.compare(code_list)
     return {
         "code": 0,
@@ -140,10 +136,9 @@ async def compare_funds(
 async def get_fund_detail(
     code: str,
     db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
 ) -> dict[str, Any]:
     """Get full fund detail including NAV, manager, and risk metrics."""
-    service = FundService(db, redis)
+    service = FundService(db)
     detail = await service.get_detail(code)
     if not detail:
         return {
@@ -166,10 +161,9 @@ async def get_nav_history(
     code: str,
     period: str = Query(default="1m", description="Period: 1m, 3m, 6m, 1y, all"),
     db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
 ) -> dict[str, Any]:
     """Get NAV history for a fund over a given period."""
-    service = FundService(db, redis)
+    service = FundService(db)
     result = await service.get_nav_history(code, period)
     return {
         "code": 0,
@@ -185,10 +179,9 @@ async def get_nav_history(
 async def get_portfolio(
     code: str,
     db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
 ) -> dict[str, Any]:
     """Get fund's top holdings (重仓股明细)."""
-    service = FundService(db, redis)
+    service = FundService(db)
     holdings = await service.get_portfolio(code)
     return {
         "code": 0,

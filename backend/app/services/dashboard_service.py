@@ -12,7 +12,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from redis.asyncio import Redis
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,9 +40,9 @@ PERIOD_DAYS: dict[str, int] = {
 class DashboardService:
     """Async service for dashboard aggregation and portfolio analytics."""
 
-    def __init__(self, db: AsyncSession, redis: Redis) -> None:
+    def __init__(self, db: AsyncSession) -> None:
         self.db = db
-        self.cache = CacheService(redis)
+        self.cache = CacheService()
 
     # ------------------------------------------------------------------
     # Summary

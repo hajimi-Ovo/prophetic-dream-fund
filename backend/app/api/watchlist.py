@@ -10,10 +10,9 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_db, get_redis
+from app.api.dependencies import get_db
 from app.schemas.holding import WatchlistCreate
 from app.services.holding_service import HoldingService
 
@@ -30,10 +29,9 @@ ERR_INVALID_CODE = 10002
 @router.get("")
 async def list_watchlist(
     db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
 ) -> dict[str, Any]:
     """List all funds in the watchlist with latest NAV data."""
-    service = HoldingService(db, redis)
+    service = HoldingService(db)
     items = await service.list_watchlist()
     return {
         "code": 0,
@@ -49,13 +47,12 @@ async def list_watchlist(
 async def add_to_watchlist(
     data: WatchlistCreate,
     db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
 ) -> dict[str, Any]:
     """Add a fund to the watchlist.
 
     Returns existing entry if the fund is already on the watchlist (idempotent).
     """
-    service = HoldingService(db, redis)
+    service = HoldingService(db)
     item = await service.add_to_watchlist(data.fund_code, data.fund_name)
     return {
         "code": 0,
@@ -71,10 +68,9 @@ async def add_to_watchlist(
 async def remove_from_watchlist(
     fund_code: str,
     db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
 ) -> dict[str, Any]:
     """Remove a fund from the watchlist by its fund code."""
-    service = HoldingService(db, redis)
+    service = HoldingService(db)
     removed = await service.remove_from_watchlist(fund_code)
     if not removed:
         return {

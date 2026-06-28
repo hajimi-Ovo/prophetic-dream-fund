@@ -1,7 +1,7 @@
 """
 Scheduled jobs for data ingestion, cache refresh, and health monitoring.
 
-Each job creates its own DB session and Redis connection so that
+Each job creates its own DB session so that
 a single failure does not poison subsequent invocations.
 """
 
@@ -16,7 +16,7 @@ from app.adapters import get_adapter
 from app.adapters.base import FundRaw, NavRaw
 from app.adapters.normalizer import DataNormalizer
 from app.database import async_session
-from app.redis_client import get_redis
+from app.services.cache_service import get_cache
 from app.services.cache_service import CacheService
 from app.services.data_ingestion_service import DataIngestionService
 from app.utils.cross_validator import CrossValidator
@@ -179,8 +179,7 @@ async def fetch_market_data() -> None:
     # Step 6 — Update Redis cache
     # ------------------------------------------------------------------
     try:
-        redis = await get_redis()
-        cache = CacheService(redis)
+        cache = get_cache()
 
         # Update latest NAV for each tracked fund
         for code in _TRACKED_FUND_CODES:
@@ -250,8 +249,7 @@ async def fetch_fund_list_daily() -> None:
 
                 # Update fund list cache
                 try:
-                    redis = await get_redis()
-                    cache = CacheService(redis)
+                    cache = get_cache()
                     cache_list = DataNormalizer.funds_to_dicts(normalized)
                     await cache.set_fund_list(cache_list)
                 except Exception:

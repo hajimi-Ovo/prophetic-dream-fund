@@ -1,25 +1,22 @@
 """
-Cache service — reads/writes Redis keys used by the API layer.
+In-memory TTL cache — drop-in replacement for Redis-backed cache.
 
-All Redis access flows through this service so that key schemas,
-TTLs, and serialisation rules are enforced in one place.
-
-Decimal values are serialised as strings to preserve precision.
+Provides the same CacheService public API backed by a dict + asyncio.Lock.
 """
 
+import asyncio
 import json
 import logging
+import time
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
-
-from redis.asyncio import Redis
 
 logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# JSON encoder that handles Decimal and date
+# JSON encoder
 # ---------------------------------------------------------------------------
 class _CacheEncoder(json.JSONEncoder):
     """Custom encoder: Decimal → str, date/datetime → isoformat."""
@@ -51,16 +48,35 @@ def _deserialize(text: str | bytes | None) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# Service
+# In-memory store
 # ---------------------------------------------------------------------------
-class CacheService:
-    """Async cache facade backed by Redis."""
+class _CacheEntry:
+    """A single cache entry with value and optional expiry."""
+    __slots__ = ("value", "expires_at")
 
-    def __init__(self, redis: Redis) -> None:
-        self.redis = redis
+    def __init__(self, value: Any, ttl: int | None = None) -> None:
+        self.value = value
+        self.expires_at = time.monotonic() + ttl if ttl else None
+
+    @property
+    def expired(self) -> bool:
+        return self.expires_at is not None and time.monotonic() > self.expires_at
+
+
+class CacheService:
+    """
+    Async in-memory cache with per-key TTL support.
+
+    Thread-safe via asyncio.Lock. Drop-in replacement for the Redis-backed
+    CacheService — same public method names and signatures.
+    """
+
+    def __init__(self) -> None:
+        self._store: dict[str, _CacheEntry] = {}
+        self._lock = asyncio.Lock()
 
     # ------------------------------------------------------------------
-    # Latest NAV (Hash)
+    # Latest NAV
     # ------------------------------------------------------------------
     async def set_latest_nav(
         self,
@@ -69,139 +85,109 @@ class CacheService:
         accumulated_nav: Decimal | None = None,
         daily_return: Decimal | None = None,
     ) -> None:
-        """Set ``fund:{code}:nav:latest`` hash with TTL 300s."""
         key = f"fund:{fund_code}:nav:latest"
-        mapping: dict[str, str] = {
-            "nav": str(nav),
-        }
+        mapping: dict[str, str] = {"nav": str(nav)}
         if accumulated_nav is not None:
             mapping["accumulated_nav"] = str(accumulated_nav)
         if daily_return is not None:
             mapping["daily_return"] = str(daily_return)
-
-        try:
-            await self.redis.hset(key, mapping=mapping)  # type: ignore[arg-type]
-            await self.redis.expire(key, 300)
-        except Exception:
-            logger.exception("Failed to set latest NAV cache for %s", fund_code)
+        async with self._lock:
+            self._store[key] = _CacheEntry(mapping, ttl=300)
 
     async def get_latest_nav(self, fund_code: str) -> dict[str, str] | None:
-        """Get ``fund:{code}:nav:latest`` hash.  Returns parsed dict or None."""
         key = f"fund:{fund_code}:nav:latest"
-        try:
-            data = await self.redis.hgetall(key)
-            if data:
-                return {k.decode() if isinstance(k, bytes) else k: v.decode() if isinstance(v, bytes) else v for k, v in data.items()}
-            return None
-        except Exception:
-            logger.exception("Failed to get latest NAV cache for %s", fund_code)
-            return None
+        async with self._lock:
+            entry = self._store.get(key)
+            if entry is None:
+                return None
+            if entry.expired:
+                del self._store[key]
+                return None
+        return entry.value
 
     # ------------------------------------------------------------------
-    # 30-day NAV (Sorted Set)
+    # 30-day NAV
     # ------------------------------------------------------------------
     async def set_nav_30d(self, fund_code: str, nav_points: list[dict[str, Any]]) -> None:
-        """
-        Set ``fund:{code}:nav:30d`` ZSET with date-as-score, TTL 3600s.
-
-        Each *nav_points* element should have keys: date (iso str), nav (str),
-        accumulated_nav, daily_return.
-        """
         key = f"fund:{fund_code}:nav:30d"
-        try:
-            pipe = self.redis.pipeline()
-            for pt in nav_points:
-                date_str = pt["date"]
-                # Encode the full point as member, date iso string as score
-                member = _serialize(pt)
-                # Convert date to ordinal for numeric score
-                try:
-                    score = date.fromisoformat(date_str).toordinal()
-                except (ValueError, TypeError):
-                    score = 0
-                pipe.zadd(key, {member: score})
-            pipe.expire(key, 3600)
-            await pipe.execute()
-        except Exception:
-            logger.exception("Failed to set NAV 30d cache for %s", fund_code)
+        async with self._lock:
+            self._store[key] = _CacheEntry(nav_points, ttl=3600)
 
     async def get_nav_30d(self, fund_code: str) -> list[dict[str, Any]]:
-        """Get ``fund:{code}:nav:30d`` sorted by date ascending."""
         key = f"fund:{fund_code}:nav:30d"
-        try:
-            members = await self.redis.zrange(key, 0, -1)
-            results: list[dict[str, Any]] = []
-            for m in members:
-                if isinstance(m, str | bytes):
-                    parsed = _deserialize(m)
-                    if parsed is not None:
-                        results.append(parsed)
-            return results
-        except Exception:
-            logger.exception("Failed to get NAV 30d cache for %s", fund_code)
-            return []
+        async with self._lock:
+            entry = self._store.get(key)
+            if entry is None:
+                return []
+            if entry.expired:
+                del self._store[key]
+                return []
+        return entry.value
 
     # ------------------------------------------------------------------
-    # Fund list (String / JSON)
+    # Fund list
     # ------------------------------------------------------------------
     async def set_fund_list(self, funds: list[dict[str, Any]]) -> None:
-        """Set ``fund:list:all`` as JSON string, TTL 600s."""
         key = "fund:list:all"
-        try:
-            await self.redis.setex(key, 600, _serialize(funds))
-        except Exception:
-            logger.exception("Failed to set fund list cache")
+        async with self._lock:
+            self._store[key] = _CacheEntry(funds, ttl=600)
 
     async def get_fund_list(self) -> list[dict[str, Any]] | None:
-        """Get ``fund:list:all``, parse JSON.  Returns None on miss."""
         key = "fund:list:all"
-        try:
-            raw = await self.redis.get(key)
-            return _deserialize(raw) if raw else None
-        except Exception:
-            logger.exception("Failed to get fund list cache")
-            return None
+        async with self._lock:
+            entry = self._store.get(key)
+            if entry is None:
+                return None
+            if entry.expired:
+                del self._store[key]
+                return None
+        return entry.value
 
     # ------------------------------------------------------------------
-    # Hot top 20 (String / JSON)
+    # Hot top 20
     # ------------------------------------------------------------------
     async def set_hot_top20(self, funds: list[dict[str, Any]]) -> None:
-        """Set ``fund:hot:top20`` as JSON, TTL 600s."""
         key = "fund:hot:top20"
-        try:
-            await self.redis.setex(key, 600, _serialize(funds))
-        except Exception:
-            logger.exception("Failed to set hot top20 cache")
+        async with self._lock:
+            self._store[key] = _CacheEntry(funds, ttl=600)
 
     async def get_hot_top20(self) -> list[dict[str, Any]] | None:
-        """Get ``fund:hot:top20``."""
         key = "fund:hot:top20"
-        try:
-            raw = await self.redis.get(key)
-            return _deserialize(raw) if raw else None
-        except Exception:
-            logger.exception("Failed to get hot top20 cache")
-            return None
+        async with self._lock:
+            entry = self._store.get(key)
+            if entry is None:
+                return None
+            if entry.expired:
+                del self._store[key]
+                return None
+        return entry.value
 
     # ------------------------------------------------------------------
-    # Refresh time (String)
+    # Refresh time
     # ------------------------------------------------------------------
     async def set_refresh_time(self, timestamp: str) -> None:
-        """Set ``market:refresh_time`` string."""
         key = "market:refresh_time"
-        try:
-            await self.redis.set(key, timestamp)
-        except Exception:
-            logger.exception("Failed to set refresh time cache")
+        async with self._lock:
+            self._store[key] = _CacheEntry(timestamp, ttl=None)
 
     async def get_refresh_time(self) -> str | None:
-        """Get ``market:refresh_time``."""
         key = "market:refresh_time"
-        try:
-            raw = await self.redis.get(key)
-            if raw is None:
+        async with self._lock:
+            entry = self._store.get(key)
+            if entry is None:
                 return None
-            return raw.decode() if isinstance(raw, bytes) else str(raw)
-        except Exception:
-            logger.exception("Failed to get refresh time cache")
-            return None
+        return entry.value
+
+
+# ---------------------------------------------------------------------------
+# Module-level singleton (replaces the old get_redis() dependency)
+# ---------------------------------------------------------------------------
+_cache: CacheService | None = None
+
+
+def get_cache() -> CacheService:
+    """Return the module-level singleton CacheService."""
+    global _cache
+    if _cache is None:
+        _cache = CacheService()
+    return _cache

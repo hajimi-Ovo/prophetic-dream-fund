@@ -10,8 +10,8 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
-    BigInteger,
     DateTime,
+    Integer,
     Numeric,
     String,
     func,
@@ -27,7 +27,7 @@ class RiskProfile(Base):
     __tablename__ = "risk_profiles"
 
     id: Mapped[int] = mapped_column(
-        BigInteger, primary_key=True, autoincrement=True
+        Integer, primary_key=True, autoincrement=True
     )
     risk_tolerance: Mapped[str] = mapped_column(
         String(20),
@@ -51,7 +51,7 @@ class RiskProfile(Base):
         comment="Last update timestamp",
     )
     user_id: Mapped[int | None] = mapped_column(
-        BigInteger, default=None, nullable=True, comment="Owner user ID"
+        Integer, default=None, nullable=True, comment="Owner user ID"
     )
 
 
@@ -61,7 +61,7 @@ class RecommendationLog(Base):
     __tablename__ = "recommendation_logs"
 
     id: Mapped[int] = mapped_column(
-        BigInteger, primary_key=True, autoincrement=True
+        Integer, primary_key=True, autoincrement=True
     )
     fund_code: Mapped[str] = mapped_column(
         String(10), nullable=False, comment="Recommended fund code"
@@ -81,5 +81,5 @@ class RecommendationLog(Base):
         comment="Recommendation generation timestamp",
     )
     user_id: Mapped[int | None] = mapped_column(
-        BigInteger, default=None, nullable=True, comment="Owner user ID"
+        Integer, default=None, nullable=True, comment="Owner user ID"
     )

@@ -13,10 +13,9 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, UploadFile
 from pydantic import BaseModel, Field
-from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_db, get_redis
+from app.api.dependencies import get_db
 from app.schemas.holding import HoldingCreate
 from app.services.holding_service import HoldingService
 from app.services.ocr_service import OcrService
@@ -111,7 +110,6 @@ async def ocr_upload(
 async def ocr_confirm(
     body: OcrConfirmRequest,
     db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
 ) -> dict[str, Any]:
     """
     Confirm OCR-parsed results and batch-create holdings.
@@ -121,7 +119,7 @@ async def ocr_confirm(
     """
     from datetime import date
 
-    holding_service = HoldingService(db, redis)
+    holding_service = HoldingService(db)
     buy_date = body.buy_date or date.today().isoformat()
 
     created: list[dict[str, Any]] = []
